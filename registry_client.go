@@ -2,7 +2,6 @@ package ssdr
 
 import (
 	"errors"
-	"fmt"
 	"github.com/gorilla/websocket"
 	"sync"
 )
@@ -27,7 +26,6 @@ func (ra *RegistryClient) Connect() (err error) {
 }
 
 func (ra *RegistryClient) handleIncomingMsg(msg *MsgRegistry) error {
-	fmt.Printf("%+v\n", *msg)
 	if msg.Type != MsgRegisterResp {
 		return errors.New("registry msg type not supported")
 	}
@@ -93,7 +91,6 @@ func (ra *RegistryClient) Subscribe(handler SubscribeHandler) (err error) {
 			if check(err) {
 				return
 			}
-			fmt.Printf("%+v\n", msg)
 			if !msg.Success {
 				check(msg.Error)
 				break
@@ -104,7 +101,6 @@ func (ra *RegistryClient) Subscribe(handler SubscribeHandler) (err error) {
 				ra.recv.Unlock()
 				break
 			}
-			log("update")
 			ra.Services = msg.Services
 			handler.Handle(msg.Services)
 		}

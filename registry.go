@@ -8,17 +8,21 @@ import (
 
 type Registry struct {
 	Addr         string
-	Services     map[string][]string
+	ServiceList  *ServiceList
 	servicesLock sync.Mutex
 	pushList     map[*websocket.Conn]int
 	pushListLock sync.Mutex
 }
 
 func NewRegistry(addr string) *Registry {
-	return &Registry{
-		Addr:     addr,
-		Services: make(map[string][]string),
+	r := &Registry{
+		Addr:        addr,
+		ServiceList: new(ServiceList),
 	}
+	r.ServiceList.OnAddService = func() {
+		r.pushAll()
+	}
+	return r
 }
 
 func (r *Registry) addPushList(conn *websocket.Conn) {
@@ -41,7 +45,7 @@ func (r *Registry) removePushList(conn *websocket.Conn) {
 
 func (r *Registry) push(conn *websocket.Conn, times int) {
 	log("push:", conn.RemoteAddr())
-	msg := &MsgRegistry{Type: MsgServicePushResp, Services: r.Services, Success: true}
+	msg := &MsgRegistry{Type: MsgServicePushResp, Services: r.ServiceList.Services, Success: true}
 	if times == -1 {
 		msg.PushEnd = true
 		delete(r.pushList, conn)
@@ -60,38 +64,38 @@ func (r *Registry) pushAll() {
 	}
 }
 
-func (r *Registry) addService(registerMsg MsgRegistry) {
-	r.servicesLock.Lock()
-	addrs := r.Services[registerMsg.Service]
-	exists := false
-	for _, addr := range addrs {
-		if addr == registerMsg.Addr {
-			exists = true
-		}
-	}
-	if !exists {
-		r.Services[registerMsg.Service] = append(addrs, registerMsg.Addr)
-		r.pushAll()
-	}
-	r.servicesLock.Unlock()
-}
+//func (r *Registry) addService(registerMsg MsgRegistry) {
+//	r.servicesLock.Lock()
+//	addrs := r.ServiceList[registerMsg.Service]
+//	exists := false
+//	for _, addr := range addrs {
+//		if addr == registerMsg.Addr {
+//			exists = true
+//		}
+//	}
+//	if !exists {
+//		r.ServiceList[registerMsg.Service] = append(addrs, registerMsg.Addr)
+//		r.pushAll()
+//	}
+//	r.servicesLock.Unlock()
+//}
 
-func (r *Registry) removeService(registerMsg MsgRegistry) {
-	r.servicesLock.Lock()
-	addrs := r.Services[registerMsg.Service]
-	j := 0
-	for _, addr := range addrs {
-		if addr != registerMsg.Addr {
-			addrs[j] = addr
-			j++
-		}
-	}
-	r.Services[registerMsg.Service] = addrs[:j]
-	r.servicesLock.Unlock()
-}
+//func (r *Registry) removeService(registerMsg MsgRegistry) {
+//	r.servicesLock.Lock()
+//	addrs := r.ServiceList[registerMsg.Service]
+//	j := 0
+//	for _, addr := range addrs {
+//		if addr != registerMsg.Addr {
+//			addrs[j] = addr
+//			j++
+//		}
+//	}
+//	r.ServiceList[registerMsg.Service] = addrs[:j]
+//	r.servicesLock.Unlock()
+//}
 
 func (r *Registry) closeConn(conn *websocket.Conn, registerMsg MsgRegistry) {
-	r.removeService(registerMsg)
+	r.ServiceList.RemoveByMsg(registerMsg)
 	r.removePushList(conn)
 	_ = conn.Close()
 }
@@ -115,8 +119,8 @@ func (r *Registry) handleIncomingConn(conn *websocket.Conn) {
 				msg.Addr = conn.RemoteAddr().String()
 			}
 			registerMsg = msg
-			r.removeService(registerMsg)
-			r.addService(registerMsg)
+			r.ServiceList.RemoveByMsg(registerMsg)
+			r.ServiceList.AddByMsg(registerMsg)
 			err = conn.WriteJSON(&MsgRegistry{Type: MsgRegisterResp, Success: true})
 		case MsgServicePushReq:
 			r.addPushList(conn)

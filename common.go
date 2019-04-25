@@ -19,7 +19,7 @@ type MsgRegistry struct {
 	// MsgServiceListResp
 	PushStart bool
 	PushEnd   bool
-	Services  map[string][]string
+	Services  ServiceListValue
 	// resp
 	Success bool
 	Error   error

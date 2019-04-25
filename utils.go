@@ -21,3 +21,19 @@ func check(err error, prompts ...string) bool {
 	}
 	return false
 }
+
+type Handler func()
+
+func (h *Handler) Handler() {
+	if *h != nil {
+		(*h)()
+	}
+}
+
+type SubscribeHandler func(list ServiceListValue)
+
+func (h *SubscribeHandler) Handle(list ServiceListValue) {
+	if *h != nil {
+		(*h)(list)
+	}
+}

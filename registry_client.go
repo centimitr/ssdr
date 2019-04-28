@@ -7,21 +7,19 @@ import (
 )
 
 type RegistryClient struct {
-	RegistryAddr       string
-	Conn               *websocket.Conn
-	ServiceListValue   ServiceListValue
-	recv               sync.Mutex
-	ServiceListInitial chan ServiceListValue
-	ServiceListUpdate  chan ServiceListValue
-	Quit               chan struct{}
+	RegistryAddr      string
+	Conn              *websocket.Conn
+	ServiceListValue  ServiceListValue
+	recv              sync.Mutex
+	ServiceListUpdate chan ServiceListValue
+	Quit              chan struct{}
 }
 
 func NewRegistryClient(addr string) *RegistryClient {
 	return &RegistryClient{
-		RegistryAddr:       addr,
-		ServiceListInitial: make(chan ServiceListValue),
-		ServiceListUpdate:  make(chan ServiceListValue),
-		Quit:               make(chan struct{}),
+		RegistryAddr:      addr,
+		ServiceListUpdate: make(chan ServiceListValue),
+		Quit:              make(chan struct{}),
 	}
 }
 
@@ -69,12 +67,8 @@ func (ra *RegistryClient) Disconnect() {
 	}
 }
 
-func (ra *RegistryClient) RegisterAddr(name string, addr string) error {
-	return ra.call(&MsgRegistry{Type: MsgRegisterReq, Service: name, Addr: addr}, true)
-}
-
-func (ra *RegistryClient) Register(name string) error {
-	return ra.RegisterAddr(name, "")
+func (ra *RegistryClient) Register(serviceName string, id string, addr string) error {
+	return ra.call(&MsgRegistry{Type: MsgRegisterReq, Service: serviceName, Id: id, Addr: addr}, true)
 }
 
 func (ra *RegistryClient) Subscribe() (err error) {
@@ -101,11 +95,7 @@ func (ra *RegistryClient) Subscribe() (err error) {
 			}
 			ra.ServiceListValue = msg.Services
 			go func() {
-				if msg.PushStart {
-					ra.ServiceListInitial <- msg.Services
-				} else {
-					ra.ServiceListUpdate <- msg.Services
-				}
+				ra.ServiceListUpdate <- msg.Services
 			}()
 		}
 	}()
@@ -116,19 +106,15 @@ func (ra *RegistryClient) Unsubscribe() error {
 	return ra.call(&MsgRegistry{Type: MsgServicePushCancelReq}, false)
 }
 
-func (ra *RegistryClient) QuickSubscribeByAddr(service string, addr string) (err error) {
+func (ra *RegistryClient) QuickSubscribe(service string, id string, addr string) (err error) {
 	err = ra.Connect()
 	if err != nil {
 		return
 	}
-	err = ra.RegisterAddr(service, addr)
+	err = ra.Register(service, id, addr)
 	if err != nil {
 		return
 	}
 	err = ra.Subscribe()
 	return
-}
-
-func (ra *RegistryClient) QuickSubscribe(service string) (err error) {
-	return ra.QuickSubscribeByAddr(service, "")
 }

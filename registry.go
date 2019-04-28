@@ -3,8 +3,13 @@ package ssdr
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"net"
+	"strconv"
+	"strings"
 	"sync"
 )
+
+const DefaultServicePort = 80
 
 type Registry struct {
 	Addr         string
@@ -64,36 +69,6 @@ func (r *Registry) pushAll() {
 	}
 }
 
-//func (r *Registry) addService(registerMsg MsgRegistry) {
-//	r.servicesLock.Lock()
-//	addrs := r.ServiceList[registerMsg.Service]
-//	exists := false
-//	for _, addr := range addrs {
-//		if addr == registerMsg.Addr {
-//			exists = true
-//		}
-//	}
-//	if !exists {
-//		r.ServiceList[registerMsg.Service] = append(addrs, registerMsg.Addr)
-//		r.pushAll()
-//	}
-//	r.servicesLock.Unlock()
-//}
-
-//func (r *Registry) removeService(registerMsg MsgRegistry) {
-//	r.servicesLock.Lock()
-//	addrs := r.ServiceList[registerMsg.Service]
-//	j := 0
-//	for _, addr := range addrs {
-//		if addr != registerMsg.Addr {
-//			addrs[j] = addr
-//			j++
-//		}
-//	}
-//	r.ServiceList[registerMsg.Service] = addrs[:j]
-//	r.servicesLock.Unlock()
-//}
-
 func (r *Registry) closeConn(conn *websocket.Conn, registerMsg MsgRegistry) {
 	r.ServiceList.RemoveByMsg(registerMsg)
 	r.removePushList(conn)
@@ -115,13 +90,22 @@ func (r *Registry) handleIncomingConn(conn *websocket.Conn) {
 		case MsgCloseReq:
 			_ = conn.Close()
 		case MsgRegisterReq:
+			var e error
+			addr := conn.RemoteAddr().(*net.TCPAddr)
 			if msg.Addr == "" {
-				msg.Addr = conn.RemoteAddr().String()
+				addr.Port = DefaultServicePort
+				msg.Addr = addr.String()
+			} else if strings.HasPrefix(msg.Addr, ":") {
+				addr.Port, e = strconv.Atoi(msg.Addr[1:])
+				msg.Addr = addr.String()
 			}
-			registerMsg = msg
-			r.ServiceList.RemoveByMsg(registerMsg)
-			r.ServiceList.AddByMsg(registerMsg)
-			err = conn.WriteJSON(&MsgRegistry{Type: MsgRegisterResp, Success: true})
+			reply := &MsgRegistry{Type: MsgRegisterResp, Success: true, Error: e}
+			if e == nil {
+				registerMsg = msg
+				r.ServiceList.RemoveByMsg(registerMsg)
+				r.ServiceList.AddByMsg(registerMsg)
+			}
+			err = conn.WriteJSON(reply)
 		case MsgServicePushReq:
 			r.addPushList(conn)
 		case MsgServicePushCancelReq:

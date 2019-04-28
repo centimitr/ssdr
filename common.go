@@ -15,6 +15,7 @@ type MsgRegistry struct {
 	Type RegistryMsgType
 	// MsgRegisterReq
 	Service string
+	Id      string
 	Addr    string
 	// MsgServiceListResp
 	PushStart bool

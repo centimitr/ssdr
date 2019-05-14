@@ -7,12 +7,12 @@ type ServiceNode struct {
 	Addr string
 }
 
-type Service []ServiceNode
+type Service []*ServiceNode
 
 type ServiceListValue map[string]Service
 
 func (svl ServiceListValue) Get(name string, excludeId string) Service {
-	var nodes []ServiceNode
+	var nodes []*ServiceNode
 	for _, node := range svl[name] {
 		if node.Id != excludeId {
 			nodes = append(nodes, node)
@@ -47,7 +47,7 @@ func (sl *ServiceList) set(name string, service Service) {
 	sl.Services[name] = service
 }
 
-func (sl *ServiceList) Add(name string, node ServiceNode) {
+func (sl *ServiceList) Add(name string, node *ServiceNode) {
 	sl.lock.Lock()
 	nodes := sl.get(name)
 	exists := false
@@ -64,10 +64,10 @@ func (sl *ServiceList) Add(name string, node ServiceNode) {
 }
 
 func (sl *ServiceList) AddByMsg(msg MsgRegistry) {
-	sl.Add(msg.Service, ServiceNode{msg.Id, msg.Addr})
+	sl.Add(msg.Service, &ServiceNode{msg.Id, msg.Addr})
 }
 
-func (sl *ServiceList) Remove(name string, node ServiceNode) {
+func (sl *ServiceList) Remove(name string, node *ServiceNode) {
 	sl.lock.Lock()
 	nodes := sl.get(name)
 	j := 0
@@ -82,5 +82,5 @@ func (sl *ServiceList) Remove(name string, node ServiceNode) {
 }
 
 func (sl *ServiceList) RemoveByMsg(msg MsgRegistry) {
-	sl.Remove(msg.Service, ServiceNode{msg.Id, msg.Addr})
+	sl.Remove(msg.Service, &ServiceNode{msg.Id, msg.Addr})
 }

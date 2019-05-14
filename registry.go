@@ -15,6 +15,7 @@ type Registry struct {
 	Addr         string
 	ServiceList  *ServiceList
 	servicesLock sync.Mutex
+	// todo: push list has concurrent issue when delete
 	pushList     map[*websocket.Conn]int
 	pushListLock sync.Mutex
 }
@@ -53,7 +54,10 @@ func (r *Registry) push(conn *websocket.Conn, times int) {
 	msg := &MsgRegistry{Type: MsgServicePushResp, Services: r.ServiceList.Services, Success: true}
 	if times == -1 {
 		msg.PushEnd = true
+		// todo: buggy lock
+		r.pushListLock.Lock()
 		delete(r.pushList, conn)
+		r.pushListLock.Unlock()
 	} else {
 		if times == 0 {
 			msg.PushStart = true
@@ -64,9 +68,11 @@ func (r *Registry) push(conn *websocket.Conn, times int) {
 }
 
 func (r *Registry) pushAll() {
+	r.pushListLock.Lock()
 	for conn, times := range r.pushList {
 		go r.push(conn, times)
 	}
+	r.pushListLock.Unlock()
 }
 
 func (r *Registry) closeConn(conn *websocket.Conn, registerMsg MsgRegistry) {

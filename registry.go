@@ -15,9 +15,8 @@ type Registry struct {
 	Addr         string
 	ServiceList  *ServiceList
 	servicesLock sync.Mutex
-	// todo: push list has concurrent issue when delete
-	pushList     map[*websocket.Conn]int
-	pushListLock sync.Mutex
+	pushList     sync.Map
+	//pushList     map[*websocket.Conn]int
 }
 
 func NewRegistry(addr string) *Registry {
@@ -32,21 +31,23 @@ func NewRegistry(addr string) *Registry {
 }
 
 func (r *Registry) addPushList(conn *websocket.Conn) {
-	r.pushListLock.Lock()
-	if r.pushList == nil {
-		r.pushList = make(map[*websocket.Conn]int)
-	}
-	r.pushList[conn] = 0
+	//r.pushListLock.Lock()
+	//if r.pushList == nil {
+	//	r.pushList = make(map[*websocket.Conn]int)
+	//}
+	//r.pushList[conn] = 0
+	r.pushList.Store(conn, 0)
 	go r.push(conn, 0)
-	r.pushListLock.Unlock()
+	//r.pushListLock.Unlock()
 }
 
 func (r *Registry) removePushList(conn *websocket.Conn) {
-	r.pushListLock.Lock()
-	if r.pushList != nil {
-		r.pushList[conn] = -1
-	}
-	r.pushListLock.Unlock()
+	//r.pushListLock.Lock()
+	//if r.pushList != nil {
+	//	r.pushList[conn] = -1
+	//}
+	r.pushList.Store(conn, -1)
+	//r.pushListLock.Unlock()
 }
 
 func (r *Registry) push(conn *websocket.Conn, times int) {
@@ -54,25 +55,25 @@ func (r *Registry) push(conn *websocket.Conn, times int) {
 	msg := &MsgRegistry{Type: MsgServicePushResp, Services: r.ServiceList.Services, Success: true}
 	if times == -1 {
 		msg.PushEnd = true
-		// todo: buggy lock
-		r.pushListLock.Lock()
-		delete(r.pushList, conn)
-		r.pushListLock.Unlock()
+		r.pushList.Delete(conn)
+		//delete(r.pushList, conn)
 	} else {
 		if times == 0 {
 			msg.PushStart = true
 		}
-		r.pushList[conn]++
+		r.pushList.Store(conn, times+1)
+		//r.pushList[conn]++
 	}
 	check(conn.WriteJSON(msg), "push")
 }
 
 func (r *Registry) pushAll() {
-	r.pushListLock.Lock()
-	for conn, times := range r.pushList {
+	r.pushList.Range(func(k, v interface{}) bool {
+		conn := k.(*websocket.Conn)
+		times := v.(int)
 		go r.push(conn, times)
-	}
-	r.pushListLock.Unlock()
+		return true
+	})
 }
 
 func (r *Registry) closeConn(conn *websocket.Conn, registerMsg MsgRegistry) {
